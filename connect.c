@@ -10,7 +10,7 @@ int main(int argc, char** argv){
     // Use buffer to store executables and their corresponding arguments.
     // Too big to go on stack, use malloc.
     char*** buffer = malloc(sizeof(char**)*MAX_CHAIN_SIZE);
-    int fds[2];
+    int fds[4];
     for(int i = 0 ; i < MAX_CHAIN_SIZE; i++){
         buffer[i] = calloc(MAX_ARGS,sizeof(char*));
         for(int j = 0; j < MAX_ARGS; j++){
@@ -18,7 +18,7 @@ int main(int argc, char** argv){
         }
     }
 
-    if(pipe(fds)){
+    if(pipe(fds) || pipe(fds+2)){
         fprintf(stderr,"Failed to create a new pipe!\n");
         return 1;
     }
@@ -27,30 +27,32 @@ int main(int argc, char** argv){
         return 1;
     }
 
-    //for(int k = 1; k < res; k++){
-        //buffer[k] will be an argument list.
-        
-    //}
-    if(!fork()){
-        printf("Child!\n");
-        if(!fork()){
-            printf("Child 2!\n");
-            close(fds[0]);
-            fprintf(stdout,"EXE1: %s\n",buffer[0][0]);
-            dup2(fds[1],1);
-            execvp(buffer[0][0],buffer[0]);
-        }else{
-            while(wait(NULL) > 0);
-            printf("Child!\n");
-            close(fds[1]);
-            dup2(fds[0],0);
-            printf("EXE2: %s\n",buffer[1][0]);
-            execvp(buffer[1][0],buffer[1]);
+    for(int k = 1; k < res; k += 2){
+        if(pipe(fds)){
+            fprintf(stderr,"Failed to create a new pipe!\n");
+            return 1;
         }
-    }else{
-        while(wait(NULL) > 0)printf("IN A CAN");
-        printf("Parent!\n");
-    }    
+        if(!fork()){
+            if(!fork()){
+                dup2(fds[0],0);
+                close(fds[1]);
+                execvp(buffer[k][0],buffer[1]);
+            }else{
+                dup2(fds[1],1);
+                close(fds[0]);
+                execvp(buffer[k-1][0],buffer[0]);
+            }
+        }else{
+            wait(NULL);
+        }
+    }
+    if(res == 0){
+        if(!fork()){
+            execvp(buffer[res-1][0],buffer[0]);
+        }else{
+            wait(NULL);
+        }    
+    }
 
 
 
@@ -58,17 +60,16 @@ int main(int argc, char** argv){
     for(int i = 0 ; i < MAX_CHAIN_SIZE; i++){
         for(int j = 0; j < MAX_ARGS; j++){
             if(buffer[i][j] != NULL && buffer[i][j][0] != '\0'){
-                printf("%s ",buffer[i][j]);
+                //printf("%s ",buffer[i][j]);
             }
-            free(buffer[i][j]);
+            //free(buffer[i][j]);
         }
-        if(i <= res){
-            printf("\n");
+        if(i < res){
+            //printf("\n");
         }
         free(buffer[i]); 
     }
     free(buffer);
-
 
 }
 
@@ -94,6 +95,7 @@ int getArgs(char** arguments, char*** buffer, int argc){   // Returns number of 
             return -1;
         }
     }
+    buffer[exeCount++][argCount] = NULL;
     return exeCount;
 }
 
