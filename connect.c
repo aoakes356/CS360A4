@@ -24,23 +24,33 @@ int main(int argc, char** argv){
     int res = getArgs(argv,buffer,argc);
     // res contains the number of executables.
     if(res == 2){
-        if(pipe(fds)){
-            fprintf(stderr,"Failed to create a new pipe!\n");
-            return 1;
-        }
-        if(!fork()){
-            dup2(fds[1],1);
-            if(close(fds[0]) < 0) fprintf(stderr,"%s\n",strerror(errno));
-            execvp(buffer[0][0],buffer[0]);
-            fprintf(stderr,"failed to execute %s! %s\n",buffer[0][0],strerror(errno));
-            return 1;
+        if(buffer[1][0] == NULL){
+            if(!fork()){
+                execvp(buffer[0][0],buffer[0]);
+                fprintf(stderr,"failed to execute %s! %s\n",buffer[0][0],strerror(errno));
+                return 1;
+            }else{
+                wait(NULL);
+            }    
         }else{
-            wait(NULL);
-            dup2(fds[0],0);
-            if(close(fds[1]) < 0) fprintf(stderr,"%s\n",strerror(errno));
-            execvp(buffer[1][0],buffer[1]);
-            fprintf(stderr,"failed to execute %s! %s\n",buffer[1][0],strerror(errno));
-            return 1;
+            if(pipe(fds)){
+                fprintf(stderr,"Failed to create a new pipe!\n");
+                return 1;
+            }
+            if(!fork()){
+                dup2(fds[1],1);
+                if(close(fds[0]) < 0) fprintf(stderr,"%s\n",strerror(errno));
+                execvp(buffer[0][0],buffer[0]);
+                fprintf(stderr,"failed to execute %s! %s\n",buffer[0][0],strerror(errno));
+                return 1;
+            }else{
+                wait(NULL);
+                dup2(fds[0],0);
+                if(close(fds[1]) < 0) fprintf(stderr,"%s\n",strerror(errno));
+                execvp(buffer[1][0],buffer[1]);
+                fprintf(stderr,"failed to execute %s! %s\n",buffer[1][0],strerror(errno));
+                return 1;
+            }
         }
     }
     // if only one executable just run it.
