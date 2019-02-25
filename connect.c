@@ -4,57 +4,55 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <errno.h>
 #include "connect.h"
 
 int main(int argc, char** argv){
     // Use buffer to store executables and their corresponding arguments.
     // Too big to go on stack, use malloc.
+    // Would have been necessary had I decided to try to make it work for numerous executables.
     char*** buffer = malloc(sizeof(char**)*MAX_CHAIN_SIZE);
-    int fds[4];
+    int fds[2];
+    int stat;
     for(int i = 0 ; i < MAX_CHAIN_SIZE; i++){
         buffer[i] = calloc(MAX_ARGS,sizeof(char*));
         for(int j = 0; j < MAX_ARGS; j++){
             buffer[i][j] = calloc(MAX_STR,sizeof(char));
         }
     }
-
-    if(pipe(fds) || pipe(fds+2)){
-        fprintf(stderr,"Failed to create a new pipe!\n");
-        return 1;
-    }
+    // Parse the arguments into executables and their corresponding arguments.
     int res = getArgs(argv,buffer,argc);
-    if(res < 0){
-        return 1;
-    }
-
-    for(int k = 1; k < res; k += 2){
+    // res contains the number of executables.
+    if(res == 2){
         if(pipe(fds)){
             fprintf(stderr,"Failed to create a new pipe!\n");
             return 1;
         }
         if(!fork()){
-            if(!fork()){
-                dup2(fds[0],0);
-                close(fds[1]);
-                execvp(buffer[k][0],buffer[1]);
-            }else{
-                dup2(fds[1],1);
-                close(fds[0]);
-                execvp(buffer[k-1][0],buffer[0]);
-            }
+            dup2(fds[1],1);
+            if(close(fds[0]) < 0) fprintf(stderr,"%s\n",strerror(errno));
+            execvp(buffer[0][0],buffer[0]);
+            fprintf(stderr,"failed to execute %s! %s\n",buffer[0][0],strerror(errno));
+            return 1;
         }else{
             wait(NULL);
+            dup2(fds[0],0);
+            if(close(fds[1]) < 0) fprintf(stderr,"%s\n",strerror(errno));
+            execvp(buffer[1][0],buffer[1]);
+            fprintf(stderr,"failed to execute %s! %s\n",buffer[1][0],strerror(errno));
+            return 1;
         }
     }
-    if(res == 0){
+    // if only one executable just run it.
+    if(res == 1){
         if(!fork()){
-            execvp(buffer[res-1][0],buffer[0]);
+            execvp(buffer[0][0],buffer[0]);
+            fprintf(stderr,"failed to execute %s! %s\n",buffer[0][0],strerror(errno));
+            return 1;
         }else{
             wait(NULL);
         }    
     }
-
-
 
     // Free the buffer.
     for(int i = 0 ; i < MAX_CHAIN_SIZE; i++){
@@ -62,7 +60,7 @@ int main(int argc, char** argv){
             if(buffer[i][j] != NULL && buffer[i][j][0] != '\0'){
                 //printf("%s ",buffer[i][j]);
             }
-            //free(buffer[i][j]);
+            free(buffer[i][j]);
         }
         if(i < res){
             //printf("\n");
@@ -70,9 +68,11 @@ int main(int argc, char** argv){
         free(buffer[i]); 
     }
     free(buffer);
+    return 0;
 
 }
 
+// Originally planned to go for extra credit but I ran out of time, I will leave thise here though.
 int getArgs(char** arguments, char*** buffer, int argc){   // Returns number of executables or -1 on error
     int exeCount = 0;
     int argCount = 0;

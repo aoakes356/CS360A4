@@ -27,7 +27,7 @@ debug: $(SRC) $(HDR)
 	$(CC) $(SRC) -g -o $(EXE) $(LIBS)
 
 run:
-	make
-	./readable
+	./connect ls -la
+	./connect ls -la : cowsay
 	
 
